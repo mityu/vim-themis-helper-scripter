@@ -150,6 +150,16 @@ Describe {scripter}
 End
 
 Describe {scripter}.run()
+  Before all
+    if v:version < 900
+      " Workaround: It seems Vim may have some built-in mappings.
+      mapclear
+      mapclear!
+      lmapclear
+      tmapclear
+    endif
+  End
+
   It clears all temporal mappings.
     if has('patch-8.2.1978') || has('nvim-0.3.0')
       Skip This version of Vim has <Cmd> and no temporal mappings are created.
