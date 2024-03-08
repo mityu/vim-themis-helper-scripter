@@ -4,6 +4,7 @@ let s:scripter = {
   \ '_object_id': -1,
   \ '_script': [],
   \ '_fn_stack': [],
+  \ '_str_stack': [],
   \ '_auto_replace_termcodes': 0,
   \}
 
@@ -37,6 +38,19 @@ function s:call_top_of_fn_stack(object_id) abort
   call call(remove(obj._fn_stack, 0), [])
 endfunction
 
+function s:feed_top_of_str_stack(object_id) abort
+  if !has_key(s:objects, a:object_id)
+    throw s:internal_error_message('cannot find scripter object by object-id:' . a:object_id)
+  endif
+
+  let obj = s:objects[a:object_id]
+  if empty(obj._str_stack)
+    throw s:internal_error_message('feedkeys string stack is empty.')
+  endif
+
+  call feedkeys(remove(obj._str_stack, 0), 'i!')
+endfunction
+
 function s:scripter.call(Fn) abort
   call add(self._fn_stack, a:Fn)
   call add(self._script,
@@ -55,12 +69,12 @@ endfunction
 
 function s:scripter.feedkeys_remap(keys) abort
   let keys = a:keys
-  if !self._auto_replace_termcodes
-    let keys = keytrans(keys)
+  if self._auto_replace_termcodes
+    let keys = s:replace_termcodes(keys)
   endif
-  let keys = substitute(keys, '\ze<[^<>]\+>', '\\', 'g')
+  call add(self._str_stack, keys)
   call add(self._script,
-    \ printf("\<Cmd>call feedkeys(\"%s\", 'i!')\<CR>", keys))
+    \ printf("\<Cmd>call %sfeed_top_of_str_stack(%s)\<CR>", s:get_sid(), self._object_id))
   return self
 endfunction
 
