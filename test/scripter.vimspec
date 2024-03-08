@@ -1,0 +1,150 @@
+let s:funcs = themis#helper('scope').funcs('autoload/themis/helper/scripter.vim')
+
+Describe s:get_new_id()
+  Before all
+    let GetNewId = s:funcs.get_new_id
+  End
+
+  It returns different number on each call
+    let appeared_ids = [GetNewId()]
+    for i in range(10)
+      let new_id = GetNewId()
+      call g:assert.not_includes(appeared_ids, new_id, 'Iteration: ' . i)
+      call add(appeared_ids, new_id)
+    endfor
+  End
+End
+
+Describe s:replace_termcodes()
+  Before all
+    let ReplaceTermcodes = s:funcs.replace_termcodes
+  End
+
+  It replaces key notations to internal byte representations.
+    Assert Equals(ReplaceTermcodes('<ESC>'), "\<ESC>")
+    Assert Equals(ReplaceTermcodes('<BS>'), "\<BS>")
+    Assert Equals(ReplaceTermcodes('<Plug>'), "\<Plug>")
+    Assert Equals(ReplaceTermcodes('<lt>Plug>'), '<Plug>')
+    Assert Equals(ReplaceTermcodes('<ESC><lt>Plug><BS>'), "\<ESC><Plug>\<BS>")
+  End
+
+End
+
+Describe {scripter}
+  Before all
+    let scripter = themis#helper('scripter')
+    inoremap @ <lt>RHS-@>
+  End
+
+  After each
+    %bwipeout!
+  End
+
+  After all
+    iunmap @
+  End
+
+  It .feedkeys() feeds keys with no-remapping.
+    call scripter.new()
+      \.feedkeys("i@\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), '@')
+  End
+
+  It .feedkeys_remap() feeds keys with remapping.
+    call scripter.new()
+      \.feedkeys_remap("i@\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), '<RHS-@>')
+
+    inoremap <buffer> <Plug>(test-remap) (RHS)
+    call scripter.new()
+        \.feedkeys_remap("o\<Plug>(test-remap)\<ESC>")
+        \.run()
+    iunmap <buffer> <Plug>(test-remap)
+    Assert Equals(getline('.'), '(RHS)')
+  End
+
+  It .feedkeys() and .feedkeys_remap() are evaluated in registered order.
+    call scripter.new()
+      \.feedkeys('i@')
+      \.feedkeys_remap('@')
+      \.feedkeys('@')
+      \.feedkeys_remap("@\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), '@<RHS-@>@<RHS-@>')
+  End
+
+  It .call() calls functions in registered order.
+    let g:log = []
+    call scripter.new()
+      \.call({-> add(g:log, 'call-1')})
+      \.call({-> add(g:log, 'call-2')})
+      \.call({-> add(g:log, 'call-3')})
+      \.run()
+    Assert Equals(g:log, ['call-1', 'call-2', 'call-3'])
+    unlet g:log
+  End
+
+  It .call() calls function without changing mode.
+    call scripter.new()
+      \.call({-> g:assert.equals(mode(), 'n')})
+      \.feedkeys('i')
+      \.call({-> g:assert.equals(mode(), 'i')})
+      \.feedkeys("\<ESC>")
+      \.call({-> g:assert.equals(mode(), 'n')})
+      \.feedkeys(':')
+      \.call({-> g:assert.equals(mode(), 'c')})
+      \.feedkeys("\<C-c>v")
+      \.call({-> g:assert.equals(mode(), 'v')})
+      \.feedkeys("\<ESC>")
+      \.run()
+  End
+
+  It .call() calls function between key inputs by .feedkeys().
+    call scripter.new()
+      \.feedkeys('ifoo')
+      \.call({-> g:assert.equals(getline('.'), 'foo')})
+      \.feedkeys('bar')
+      \.feedkeys("\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), 'foobar')
+  End
+
+  It .call() calls function between key inputs by .feedkeys_remap().
+    call scripter.new()
+      \.feedkeys('ifoo')
+      \.call({-> g:assert.equals(getline('.'), 'foo')})
+      \.feedkeys('bar')
+      \.feedkeys("\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), 'foobar')
+  End
+
+  It .set_auto_replace_termcodes() changes the way of handling {keys} of .feedkeys().
+    call scripter.new()
+      \.feedkeys('i<Char-97>')
+      \.set_auto_replace_termcodes(1)
+      \.feedkeys('<Char-97>')
+      \.feedkeys("\<Char-97>")
+      \.set_auto_replace_termcodes(0)
+      \.feedkeys('<Char-97>')
+      \.feedkeys("\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), "<Char-97>\<Char-97>\<Char-97><Char-97>")
+  End
+
+  It .set_auto_replace_termcodes() changes the way of handling {keys} of .feedkeys_remap().
+    call scripter.new()
+      \.feedkeys_remap('o<Char-97>')
+      \.set_auto_replace_termcodes(1)
+      \.feedkeys_remap('<Char-97>')
+      \.feedkeys_remap("\<Char-97>")
+      \.set_auto_replace_termcodes(0)
+      \.feedkeys_remap('<Char-97>')
+      \.feedkeys_remap("\<ESC>")
+      \.run()
+    Assert Equals(getline('.'), "<Char-97>\<Char-97>\<Char-97><Char-97>")
+  End
+
+End
