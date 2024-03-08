@@ -148,3 +148,19 @@ Describe {scripter}
   End
 
 End
+
+Describe {scripter}.run()
+  It clears all temporal mappings.
+    if has('patch-8.2.1978') || has('nvim-0.3.0')
+      Skip This version of Vim has <Cmd> and no temporal mappings are created.
+    endif
+
+    call themis#helper('scripter').new().call({-> 0}).run()
+
+    for mode in split('nvicxslt', '\zs')
+      call g:assert.match(execute(mode . 'map'),
+        \ '^[[:space:]]*No mapping found$', 'mode:' . mode)
+    endfor
+
+  End
+End

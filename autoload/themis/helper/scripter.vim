@@ -4,6 +4,7 @@ let s:scripter = {
   \ '_object_id': -1,
   \ '_script': [],
   \ '_fn_stack': [],
+  \ '_temporal_maps': [],
   \ '_auto_replace_termcodes': 0,
   \}
 
@@ -35,15 +36,31 @@ function s:call_top_of_fn_stack(object_id) abort
   endif
 
   call call(remove(obj._fn_stack, 0), [])
+  return ''
 endfunction
 
-function s:scripter.call(Fn) abort
-  call add(self._fn_stack, a:Fn)
-  let script =
-    \ printf("\<Cmd>call %scall_top_of_fn_stack(%s)\<CR>", s:get_sid(), self._object_id)
-  call add(self._script, [script, 0])
-  return self
-endfunction
+if has('patch-8.2.1978') || has('nvim-0.3.0')
+  function s:scripter.call(Fn) abort
+    call add(self._fn_stack, a:Fn)
+    let script =
+      \ printf("\<Cmd>call %scall_top_of_fn_stack(%s)\<CR>", s:get_sid(), self._object_id)
+    call add(self._script, [script, 0])
+    return self
+  endfunction
+else
+  function s:scripter.call(Fn) abort
+    call add(self._fn_stack, a:Fn)
+    let lhs = printf('%s(_themis_helper_map-%d)', s:get_sid(), s:get_new_id())
+    let mapcmd = printf('<expr> %s <SID>call_top_of_fn_stack(%s)', lhs, self._object_id)
+    execute 'noremap' mapcmd
+    execute 'noremap!' mapcmd
+    execute 'lnoremap' mapcmd
+    execute 'tnoremap' mapcmd
+    call add(self._script, ["\<Ignore>" . s:replace_termcodes(lhs), 1])
+    call add(self._temporal_maps, lhs)
+    return self
+  endfunction
+endif
 
 function s:scripter.feedkeys(keys) abort
   let keys = a:keys
@@ -72,6 +89,13 @@ function s:scripter.run() abort
     endif
   endfor
   call feedkeys('', 'x')
+
+  for lhs in self._temporal_maps
+    execute 'unmap' lhs
+    execute 'unmap!' lhs
+    execute 'lunmap' lhs
+    execute 'tunmap' lhs
+  endfor
 
   if !has_key(s:objects, self._object_id)
     throw s:internal_error_message('cannot find self by object-id: ' . self._object_id)
